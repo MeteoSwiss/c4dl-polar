@@ -29,7 +29,7 @@ transform_TB = lambda x: x*10+250
 transform_radiance = lambda x: x*100
 transform_T = lambda x: x*7.2+290
 input_transforms = {
-    "Rain rate [mm h$^{-1}$]": lambda x: 10**(x*0.528-0.051),
+    "Rain rate": lambda x: 10**(x*0.528-0.051),
     "CZC": lambda x: x*8.71+21.3,
     "EZC-20": lambda x: x*1.97,
     "EZC-45": lambda x: x*1.97,
@@ -40,13 +40,13 @@ input_transforms = {
     "Current dens.": lambda x: 10**(x*0.731-0.0718),
     "POH": lambda x: x,
     "$R > 10\\mathrm{mm\\,h^{-1}}$": lambda x: x,
-        "KDP": lambda x: replace_zero(x,-0.38300282) * 0.1765 + 0.5776,
+    "KDP": lambda x: replace_zero(x,-0.38300282) * 0.1765 + 0.5776,
     "RHOHV": lambda x: replace_one(x),
     "ZV": lambda x: x*9.154 + 14.9768,
     "ZDR": lambda x: x*0.6675 + 0.297, 
     }
 input_norm = {
-    "Rain rate [mm h$^{-1}$]": colors.LogNorm(0.01, 100, clip=True),
+    "Rain rate": colors.LogNorm(0.01, 100, clip=True),
     "LZC": colors.LogNorm(0.75, 100, clip=True),
     "Light. dens.": colors.LogNorm(0.01, 100, clip=True),
     "Current dens.": colors.LogNorm(0.01, 100, clip=True),
@@ -58,7 +58,7 @@ input_norm = {
     "RHOHV": colors.Normalize(0,1),
 }
 input_ticks = {
-    "Rain rate [mm h$^{-1}$]": [0.1, 1, 10, 100],
+    "Rain rate]": [0.1, 1, 10, 100],
     "Lightning": [0, 0.5, 1],
     "POH": [0, 0.5, 1],
     "$R > 10\\mathrm{mm\\,h^{-1}}$": [0, 0.5, 1],
@@ -176,11 +176,11 @@ def plot_model_examples(X, Y, models, shown_inputs=(0,25,12,9),
     return fig
 
 
-def plot_multiple_models(X, Y, models, shown_inputs=(0,25,12,9),
+def plot_multiple_models(X, Y, models, model_names, shown_inputs=(0,25,12,9),
     input_timesteps=(-4,-1), output_timesteps=(0,2,5,11),
     batch_member=0, interval_mins=5,
-    input_names=("Rain rate", "Lightning", "HRV", "CTH"),
-    future_input_names=("CAPE-MU",),
+    input_names=("Rain rate", "KDP", "ZDR"),
+    future_input_names=(),
     min_p=0.025, plot_scale=256
 ):
     num_timesteps = len(input_timesteps)+len(output_timesteps)
@@ -195,7 +195,7 @@ def plot_multiple_models(X, Y, models, shown_inputs=(0,25,12,9),
     )
     gs = gridspec.GridSpec(gs_rows, gs_cols+5, wspace=0.02, hspace=0.05,
         width_ratios=width_ratios)
-    batch = [x[batch_member:batch_member+1,...] for x in X["rpq"]]
+    batch = [x[batch_member:batch_member+1,...] for x in X[model_names[0]]]
     obs = [y[batch_member:batch_member+1,...] for y in Y]
 
     fig = plt.figure(figsize=(gs_cols*1.5, gs_rows/2*1.5))
@@ -566,7 +566,6 @@ def plot_CSI_prob(conf_matrix, names, prefix, colors_linestyles=None, show_auc=T
             c = colors_linestyles[model]
             if prefix == "rain":
                 ls = linestyles[model]
-                ms = None
         else:
             c = ls = None
         ax.plot(thresholds, CSI[model], label=labels[model],
@@ -691,3 +690,113 @@ def FSS_legend(values, ax):
         for s in values_r
     ]
     ax.legend(custom_lines, labels, ncol=3, mode="expand")
+
+def plot_probab_curve(conf_matrix, names, prefix, colors_linestyles=None, show_auc=True,fig=None,ax=None,legend=True,xlabel=True):
+    thresholds=np.linspace(0, 1, 101)
+
+    if fig is None:
+            fig = plt.figure()
+    if ax is None:
+        ax = fig.add_subplot()
+    
+    colors_linestyles = {
+    ("5"): ("#785EF0"),
+    ("10"): ("#33a02c"),
+    ("15"): ("#DC267F"),
+    ("20"): ("#a6cee3"),
+    ("30"): ("#FFB000"),
+    ("60"): ("#648FFF"),
+    ("r"): ("#1f78b4"),
+    ("rp"): ("#ff7f0e"),
+    ("rq"): ("#2ca02c"),
+    ("rpq10"): ("#648FFF"),
+    ("rpq30"): ("#648FFF"),
+    ("rpq50"): ("#648FFF"),
+
+    }
+    linestyles = {
+    ("rpq10"): ("solid"),
+    ("rpq30"): ("dashed"),
+    ("rpq50"): ("dotted"),
+    }
+
+    names_str = {
+    ("5"): ("5 min"),
+    ("10"): ("10 min"),
+    ("15"): ("15 min"),
+    ("20"): ("20 min"),
+    ("30"): ("30 min"),
+    ("60"): ("60 min"),
+    ("r"): ("r"),
+    ("rp"): ("rp"),
+    ("rq"): ("rq"),
+    ("rpq10"): ("10mm"),
+    ("rpq30"): ("30mm"),
+    ("rpq50"): ("50mm"),
+
+    }
+
+
+    CSI = {}
+    labels = {}
+    for (k,cm) in conf_matrix.items():
+        CSI[k] = evaluation.intersection_over_union(cm)
+        m = CSI[k]
+        m = m.max(axis=0)
+        if prefix == "rain":
+            m= m[0]
+        else:
+            m=m
+        labels[k] = f"{names_str[k]}  : {m:.3f}"
+
+
+    for model in CSI:
+        if colors_linestyles is not None:
+            ls=None
+            c = colors_linestyles[model]
+            if prefix == "rain":
+                ls = linestyles[model]
+        else:
+            c = ls = None
+        ax.plot(thresholds, CSI[model], label=labels[model],
+            color=c, linestyle=ls,markevery=5)
+    
+    ylim = ax.get_ylim()
+    ax.set_ylim((0,ylim[1]))
+    ax.set_xlim((0,1))
+
+    ax.legend()
+
+    if xlabel:
+        ax.set_xlabel("Threshold")
+    if not xlabel:
+        ax.set_xticks([])
+    ax.set_ylabel("Critical Success Index")
+
+    return (fig,ax)
+
+def get_all_files(prefixes=("lightning","hail","rain"),run="run1",sources=["r","rpq"]):
+    files={}
+    scales = {"2": 0, "4": 1, "8": 2}
+
+    for p in prefixes:
+        files[p] ={}
+        if p == "rain":
+            for thr in [10,30,50]:
+                files[p][thr] = {}
+                for src in ["r","rpq"]:
+                    dir = f"../runs/{run}/results/"
+                    path = os.path.join(dir,f"FSS-{p}{thr}-{src}.npy")
+                    FSS_scores = np.load(path)
+                    for scale,i in scales.items():
+                        FSS = FSS_scores[i,1:,0].max(axis=0)
+
+                        files[p][thr][f"{src}{str(scale)}"] = "{:.3f}".format(FSS)
+        else:
+
+            for src in ["r","rpq"]:
+                dir = f"../runs/{run}/results/"
+                path = os.path.join(dir,f"FSS-{p}-{src}.npy")
+                FSS_scores = np.load(path)
+                files[p][src] = {str(scale):  FSS_scores[i,1:,:].max(axis=0).round(3) for scale,i in scales.items()}
+    return files
