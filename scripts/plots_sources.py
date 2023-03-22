@@ -9,7 +9,7 @@ import tensorflow as tf
 from c4dlpolar.analysis import calibration, evaluation, shapley
 from c4dlpolar.visualization import plots
 
-import training
+from training import model_sources
 
 
 def exclusion_plot(prefix="lightning", out_file=None, fig=None, axes=None):
@@ -122,7 +122,7 @@ def plot_examples(
         plt.close(fig)
 
 def plot_two_models(
-    batch_gens, models, prefix, batch_number=13,
+    batch_gens, models, model_names, prefix, batch_number=13,
     batch_member=30, out_file=None, 
     shown_inputs=("RZC", "occurrence-8-10", "KDP", "ZDR-CORR"),
     input_names=("Rain rate", "Lightning", "KDP", "ZDR"),
@@ -137,31 +137,31 @@ def plot_two_models(
     if plot_kwargs is None:
         plot_kwargs = {}
 
-    names = batch_gens["rpq"].pred_names_past + batch_gens["rpq"].pred_names_future
+    names = batch_gens[model_names[0]].pred_names_past + batch_gens[model_names[0]].pred_names_future
     shown_inputs = [names.index(ip) for ip in shown_inputs]
     shown_future_inputs = [names.index(ip) for ip in shown_future_inputs]
 
     Xs = {}
-    (X,Y) = batch_gens["r"].batch(batch_number, dataset='test')
+    (X,Y) = batch_gens[model_names[1]].batch(batch_number, dataset='test')
 
     if preprocess_rain:
         ip = [tf.keras.Input(shape=x.shape[1:]) for x in X]
-        pred = models["r"](ip)
+        pred = models[model_names[1]](ip)
         pred = tf.expand_dims(pred, axis=1)
         pred = tf.reduce_sum(pred[...,1:], axis=-1, keepdims=True)
-        model_r = tf.keras.Model(inputs=ip, outputs=pred)
+        model_1 = tf.keras.Model(inputs=ip, outputs=pred)
         
     else:
-        model_r = models["r"]
+        model_1 = models[model_names[1]]
 
-    Xs["r"] = X
-    (X,Y) = batch_gens["rpq"].batch(batch_number, dataset='test')
+    Xs[model_names[1]] = X
+    (X,Y) = batch_gens[model_names[0]].batch(batch_number, dataset='test')
     if preprocess_rain:
         ip = [tf.keras.Input(shape=x.shape[1:]) for x in X]
-        pred = models["rpq"](ip)
+        pred = models[model_names[0]](ip)
         pred = tf.expand_dims(pred, axis=1)
         pred = tf.reduce_sum(pred[...,1:], axis=-1, keepdims=True)
-        model_rpq = tf.keras.Model(inputs=ip, outputs=pred)
+        model_2 = tf.keras.Model(inputs=ip, outputs=pred)
 
         rr = 10**Y[0].astype(np.float32)
         rr = rr.mean(axis=1, keepdims=True)
@@ -169,13 +169,13 @@ def plot_two_models(
         mu = np.log(rr) - 0.5*sig**2
         Y[0] = norm.sf(np.log(10.0), loc=mu, scale=sig)
     else:
-        model_rpq = models["rpq"]
+        model_2 = models[model_names[0]]
 
-    Xs["rpq"] = X
+    Xs[model_names[0]] = X
     
 
-    fig = plots.plot_multiple_models(Xs, Y, {"obs": "obs", "rpq": model_rpq, "r": model_r},
-        batch_member=batch_member, shown_inputs=shown_inputs,        
+    fig = plots.plot_multiple_models(Xs, Y, {"obs": "obs", model_names[0]: model_2, model_names[1]: model_1},
+        model_names,batch_member=batch_member, shown_inputs=shown_inputs,        
         input_names=input_names, future_input_names=future_input_names,
         **plot_kwargs)
 
@@ -194,7 +194,8 @@ def plot_sources_models(batch_gens, models, prefix="lightning",sample=(32,11),pl
         if plot_kwargs == None:
             plot_kwargs = {"min_p": 0.025}        
         plot_two_models(
-        batch_gens, models, prefix=prefix,
+        batch_gens, models, model_names=["rpq","r"],
+        prefix=prefix,
         batch_number=sample[0],
         batch_member=sample[1], 
         shown_inputs=("RZC","KDP","ZDR-CORR"),
@@ -209,7 +210,8 @@ def plot_sources_models(batch_gens, models, prefix="lightning",sample=(32,11),pl
         if plot_kwargs == None:
             plot_kwargs = {"min_p": 5e-4, "output_timesteps": [0]}
         plot_two_models(
-        batch_gens, models, prefix=prefix,
+        batch_gens, models, model_names=["rpq","r"], 
+        prefix=prefix,
         batch_number=sample[0],
         batch_member=sample[1], 
         shown_inputs=("RZC","KDP","ZDR-CORR"),
@@ -225,7 +227,8 @@ def plot_sources_models(batch_gens, models, prefix="lightning",sample=(32,11),pl
         if plot_kwargs == None:
             plot_kwargs = {"min_p": 5e-5}
         plot_two_models(
-        batch_gens, models, prefix=prefix,
+        batch_gens, models, model_names=["rpq","r"], 
+        prefix=prefix,
         batch_number=sample[0],
         batch_member=sample[1], 
         shown_inputs=("BZC","RZC","KDP","ZDR-CORR"),
@@ -266,37 +269,7 @@ def plot_metrics_leadtime(
 
     plt.close(fig)
 
-def get_models(prefix):
 
-    if prefix == "lightning":
-        target = "occurrence-8-10"
-    elif prefix == "rain":
-        target = "CPCH"
-    elif prefix == "hail":
-        target = "BZC"
-
-    (_, batch_gen_r, model_r, _) = training.model_sources("r",
-        target=target)
-
-    (_, batch_gen_rpq, model_rpq, _) = training.model_sources("rpq",
-        target=target)
-    
-    model_rpq.load_weights(f"../models/{prefix}/{prefix}-rpq.h5")
-    model_r.load_weights(f"../models/{prefix}/{prefix}-r.h5")
-    if prefix == "lightning":
-        p = np.linspace(0,1,101)
-        occurrence_r = np.load("../results/lightning/test/calibration-lightning-r.npy")
-        occurrence_rpq = np.load("../results/lightning/test/calibration-lightning-rpq.npy")
-
-        calib_model_r = calibration.calibrated_model(model_r, p, occurrence_r)
-        calib_model_rpq = calibration.calibrated_model(model_rpq, p, occurrence_rpq)
-
-        batch_gens = {"rpq": batch_gen_rpq,"r": batch_gen_r}
-        models = {"rpq": calib_model_rpq,"r": calib_model_r}
-    else:
-        batch_gens = {"rpq": batch_gen_rpq,"r": batch_gen_r}
-        models = {"rpq": model_rpq,"r": model_r}
-    return batch_gens,models
 
 metrics = [
     ("CSI", evaluation.intersection_over_union),
@@ -372,10 +345,8 @@ def shapley_leadtime_plots(run="run1",out_file=None, sources = 'rpq'):
 
 
 def plot_all_CSI(run="run1",src_str=["rpq"],prefixes=("lightning","hail","rain"),leadtime=True,out_file=None):
-
     
     fig = plt.figure(figsize=(6,8))
-
 
     dir = f"../runs/{run}/results/"
         
@@ -461,3 +432,35 @@ def FSS_plots(prefixes=("lightning","hail","rain"),run="run1",out_file=None):
         fig.savefig(out_file, bbox_inches='tight')
         plt.close(fig)
 
+
+
+def get_models(prefix,model1=["rpq","run3"],model2=["r","run1"]):
+    
+    if prefix == "lightning":
+        target = "occurrence-8-10"
+    elif prefix == "rain":
+        target = "CPCH"
+    elif prefix == "hail":
+        target = "BZC"
+
+    (_, batch_gen_1, model_1, _) = model_sources(model1[0],
+        target=target)
+
+    (_, batch_gen_2, model_2, _) = model_sources(model2[0],
+        target=target)
+    model_2.load_weights(f"../runs/{model2[1]}/{prefix}-{model2[0]}.h5")
+    model_1.load_weights(f"../runs/{model1[1]}/{prefix}-{model1[0]}.h5")
+    if prefix == "lightning":
+        p = np.linspace(0,1,101)
+        occurrence_1 = np.load(f"../runs/{model1[1]}/calibration/calibration-lightning-{model1[0]}.npy")
+        occurrence_2 = np.load(f"../runs/{model2[1]}/calibration/calibration-lightning-{model2[0]}.npy")
+
+        calib_model_1 = calibration.calibrated_model(model_1, p, occurrence_1)
+        calib_model_2 = calibration.calibrated_model(model_2, p, occurrence_2)
+
+        batch_gens = {model2[0]: batch_gen_2,model1[0]: batch_gen_1}
+        models = {model2[0]: calib_model_2,model1[0]: calib_model_1}
+    else:
+        batch_gens = {model2[0]: batch_gen_2,model1[0]: batch_gen_1}
+        models = {model2[0]: model_2,model1[0]: model_1}
+    return batch_gens,models
