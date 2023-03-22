@@ -81,14 +81,4 @@ def get_all_files(run="run1"):
 
     return files
 
-def load_scores(files, score_index=0):
-    scores = {}
-    for src,fn in files.items():
-        if src == 'null':
-            src = ''
-        scores_src = np.loadtxt(fn)
-        if np.ndim(scores_src) == 0:
-            scores_src = [scores_src]
-        scores[src] = scores_src[score_index]
 
-    return scores
