@@ -23,7 +23,7 @@ def setup_batch_gen(
         "AREA57","BZC","CPCH",
         "occurrence-8-10",
         "KDP","RHOHV","ZV-CORR","ZDR-CORR",
-        "obs-qual"
+        "vv","ami","ama","noi"
     ]
     pred_names = select_sources(pred_names, sources)
 
@@ -70,10 +70,11 @@ def setup_batch_gen(
         }
 
     if "qualindex" in sources: 
-        var = "obs-qual"
-        raw[var]["static"] = True
-
-     
+        static_vars = ["vv","ami","ama","noi"]
+        for var in static_vars:
+            if var in raw:
+                raw[var]["static"] = True
+   
 
     # features and targets are defined by transforming the raw data
     transforms = {"zeros": {
@@ -182,18 +183,34 @@ def setup_batch_gen(
 
     if 'qualindex' in sources:
         transforms.update({
-        "obs-qual": {
-            "source_vars": ["obs-qual"],
+        "vv": {
+            "source_vars": ["vv"],
             "transform": lambda x: x ,
             "timeframe": "static"   
-        }})    
+        },
+        "ami": {
+            "source_vars": ["ami"],
+            "transform": lambda x: x ,
+            "timeframe": "static"
+        },
+        "ama": {
+            "source_vars": ["ama"],
+            "transform": lambda x: x ,
+            "timeframe": "static"   
+        },
+        "noi": {
+            "source_vars": ["noi"],
+            "transform": lambda x: x ,
+            "timeframe": "static"
+        }})
+
     # predictors
     pred_names = [
         "RZC", "CZC",
         "EZC-20", "EZC-45",
         "HZC", "LZC",
         "KDP","RHOHV","ZV-CORR","ZDR-CORR",
-        "obs-qual"
+        "vv","ami","ama","noi"
     ]
 
     if not ("CPCH" in transforms[target]["source_vars"]):
@@ -243,7 +260,7 @@ def select_sources(pred_names, sources=()):
             "polar": [
                 "KDP","RHOHV","ZV-CORR","ZDR-CORR"
             ],
-            "qualindex": ["obs-qual"]
+            "qualindex": ["vv","ama","ami","noi"]
         }
 
         var_list = []
@@ -391,7 +408,6 @@ def conf_matrix(
 def get_FSS(sources_str, target="occurrence-8-10", fn_prefix="lightning",
     dataset="test"
 ):
-    run="run1"
     if sources_str in ("", "null"):
         sources_str = ""
         sources_suffix = "null"
