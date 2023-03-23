@@ -16,11 +16,12 @@ if you just want to run it.
 
 # Downloading data
 
-The dataset can be found at the following Zenodo repositories: 10.5281/zenodo.7760740. Follow the instructions there on where to place the data.
+The dataset for the polarimetric variables and quality indices, pretrained models and results can be found at the following Zenodo repository: https://doi.org/10.5281/zenodo.7760740. Follow the instructions there on where to place the data.
+The dataset for radar can be found at the following Zenodo repository: https://zenodo.org/record/6802292
 
 # Pretrained models
 
-The pretrained models are available at https://doi.org/10.5281/zenodo.7157986. Unzip the files `models-*.zip` found there to the `runs/run*` directory and `results.zip` to the `runs/run*/results` directory..
+The pretrained models are available at https://doi.org/10.5281/zenodo.7760740. Unzip the files `models-*.zip` found there to the `runs/run*` directory and `results.zip` to the `runs/run*/results` directory..
 
 # Running
 
